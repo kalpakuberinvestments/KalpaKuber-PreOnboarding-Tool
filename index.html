@@ -231,7 +231,7 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
     </div>
 
     <div class="card">
-      <textarea id="entryText" rows="6" style="min-height:120px;" placeholder="Log a note or task…"></textarea>
+      <textarea id="entryText" rows="6" style="min-height:120px;overflow-y:hidden;" placeholder="Log a note or task…" oninput="autoGrow(this)"></textarea>
       <div class="entry-controls">
         <select id="entryType" onchange="onTypeChange()">
           <option value="Note">Note 📝</option>
@@ -909,6 +909,10 @@ function onTypeChange(){
   $('entryDate').style.display = isTask ? '' : 'none';
   $('entryTime').style.display = isTask ? '' : 'none';
 }
+function autoGrow(el){
+  el.style.height = 'auto';
+  el.style.height = Math.max(el.scrollHeight, 120) + 'px';
+}
 function saveEntry(){
   const text = $('entryText').value.trim();
   if(!text){ toast('Write something first'); return; }
@@ -934,6 +938,7 @@ function editEntry(id){
   $('entryText').value = e.text;
   $('entryType').value = e.type;
   onTypeChange();
+  autoGrow($('entryText'));
   if(e.type==='Task'){ $('entryPriority').value = e.priority||'Medium'; $('entryDate').value = e.date||''; $('entryTime').value = e.time||''; }
   $('saveEntryBtn').textContent = 'Update Entry';
   $('cancelEditBtn').style.display = '';
@@ -947,6 +952,7 @@ function cancelEditEntry(){
   $('entryTime').value = '';
   $('entryType').value = 'Note';
   onTypeChange();
+  autoGrow($('entryText'));
   $('saveEntryBtn').textContent = 'Save Entry';
   $('cancelEditBtn').style.display = 'none';
 }
