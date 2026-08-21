@@ -60,8 +60,21 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
 @media(max-width:600px){.grid2{grid-template-columns:1fr;}}
 /* LOG */
 .entry-controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center;}
+.entry-textarea-wrap{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;width:100%;}
+.entry-textarea-wrap textarea{min-height:120px;width:100%;max-width:100%;}
+.entry-form-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+.entry-form-row>*{flex:1;min-width:120px;}
+.entry-form-row select,.entry-form-row input{flex-shrink:1;min-width:auto;}
+@media(max-width:768px){
+  .entry-form-row{flex-direction:column;}
+  .entry-form-row>*{min-width:100%;flex:1 1 auto;}
+}
 .entries-list{display:flex;flex-direction:column;gap:8px;margin-top:12px;}
-.entry{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;}
+.entry{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;}
+@media(max-width:600px){
+  .entry{flex-direction:column;}
+  .entry-actions{width:100%;display:flex;gap:4px;justify-content:flex-start;}
+}
 .entry.done{opacity:.55;}
 .entry.done .entry-text{text-decoration:line-through;}
 .entry-meta{font-size:.68rem;color:var(--text-dim);margin-top:4px;}
@@ -103,6 +116,11 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
 .col.drag-over{outline:2px dashed var(--primary);}
 .badge.pending-client{background:rgba(180,83,9,.14);color:var(--amber);}
 .badge.pending-me{background:rgba(29,78,216,.12);color:var(--primary);}
+/* TASK & LEAD LINKING */
+.related-lead-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(109,40,217,.12);color:var(--purple);font-size:.68rem;font-weight:700;padding:3px 8px;border-radius:5px;margin-top:4px;}
+.related-lead-badge:hover{cursor:pointer;opacity:.8;}
+.task-link-badge{display:inline-block;background:rgba(15,118,110,.14);color:var(--teal);font-size:.62rem;font-weight:800;padding:2px 6px;border-radius:5px;text-transform:uppercase;letter-spacing:.03em;margin-right:4px;}
+.lead-task-count{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:rgba(29,78,216,.12);color:var(--primary);border-radius:50%;font-size:.68rem;font-weight:700;margin-left:4px;}
 /* CLIENTS */
 .client-row{display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;gap:10px;flex-wrap:wrap;}
 /* MODAL */
@@ -244,6 +262,9 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
         </select>
         <input type="date" id="entryDate" style="display:none;" title="Due date">
         <input type="time" id="entryTime" style="display:none;" title="Time">
+        <select id="entryRelatedLead" style="display:none;" title="Link to a lead">
+          <option value="">— No lead —</option>
+        </select>
         <button class="primary" id="saveEntryBtn" onclick="saveEntry()">Save Entry</button>
         <button id="cancelEditBtn" style="display:none;" onclick="cancelEditEntry()">Cancel</button>
       </div>
@@ -917,6 +938,8 @@ function onTypeChange(){
   $('entryPriority').style.display = isTask ? '' : 'none';
   $('entryDate').style.display = isTask ? '' : 'none';
   $('entryTime').style.display = isTask ? '' : 'none';
+  $('entryRelatedLead').style.display = isTask ? '' : 'none';
+  if(isTask) updateLeadDropdown();
 }
 function autoGrow(el){
   el.style.height = 'auto';
@@ -929,16 +952,17 @@ function saveEntry(){
   const priority = type==='Task' ? $('entryPriority').value : null;
   const date = type==='Task' ? $('entryDate').value : '';
   const time = type==='Task' ? $('entryTime').value : '';
+  const relatedLeadId = type==='Task' ? $('entryRelatedLead').value : '';
   if(editingEntryId){
     const e = DB.entries.find(x=>x.id===editingEntryId);
-    if(e) Object.assign(e, { type, text, priority, date, time });
+    if(e) Object.assign(e, { type, text, priority, date, time, relatedLeadId: relatedLeadId || null });
     toast('Entry updated');
   } else {
-    DB.entries.unshift({ id: uid(), type, text, priority, date, time, done:false, createdAt: Date.now() });
+    DB.entries.unshift({ id: uid(), type, text, priority, date, time, relatedLeadId: relatedLeadId || null, done:false, createdAt: Date.now() });
     toast('Entry saved');
   }
   cancelEditEntry();
-  persist(); renderEntries(); renderTasks(); renderToday();
+  persist(); renderEntries(); renderTasks(); renderToday(); renderPipeline();
 }
 function editEntry(id){
   const e = DB.entries.find(x=>x.id===id);
@@ -948,7 +972,12 @@ function editEntry(id){
   $('entryType').value = e.type;
   onTypeChange();
   autoGrow($('entryText'));
-  if(e.type==='Task'){ $('entryPriority').value = e.priority||'Medium'; $('entryDate').value = e.date||''; $('entryTime').value = e.time||''; }
+  if(e.type==='Task'){ 
+    $('entryPriority').value = e.priority||'Medium'; 
+    $('entryDate').value = e.date||''; 
+    $('entryTime').value = e.time||''; 
+    $('entryRelatedLead').value = e.relatedLeadId||'';
+  }
   $('saveEntryBtn').textContent = 'Update Entry';
   $('cancelEditBtn').style.display = '';
   switchTab('log');
@@ -959,6 +988,7 @@ function cancelEditEntry(){
   $('entryText').value = '';
   $('entryDate').value = '';
   $('entryTime').value = '';
+  $('entryRelatedLead').value = '';
   $('entryType').value = 'Note';
   onTypeChange();
   autoGrow($('entryText'));
@@ -974,6 +1004,54 @@ function deleteEntry(id){
 function toggleDone(id){
   const e = DB.entries.find(x=>x.id===id);
   if(e){ e.done=!e.done; persist(); renderEntries(); renderTasks(); }
+}
+function updateLeadDropdown(){
+  const dropdown = $('entryRelatedLead');
+  const currentValue = dropdown.value;
+  dropdown.innerHTML = '<option value="">— No lead —</option>';
+  DB.leads.forEach(l=>{
+    const option = document.createElement('option');
+    option.value = l.id;
+    option.textContent = `${l.name} (${l.stage})`;
+    dropdown.appendChild(option);
+  });
+  dropdown.value = currentValue;
+}
+function addLeadTask(){
+  const leadId = $('leadId').value;
+  const taskText = $('leadTaskText').value.trim();
+  const taskDate = $('leadTaskDate').value;
+  if(!leadId){ toast('Save the lead first'); return; }
+  if(!taskText){ toast('Enter task text'); return; }
+  const lead = DB.leads.find(l=>l.id===leadId);
+  if(!lead) return;
+  DB.entries.unshift({ 
+    id: uid(), 
+    type: 'Task', 
+    text: taskText, 
+    priority: 'Medium', 
+    date: taskDate,
+    time: '',
+    relatedLeadId: leadId,
+    done:false, 
+    createdAt: Date.now() 
+  });
+  $('leadTaskText').value = '';
+  $('leadTaskDate').value = '';
+  persist(); 
+  renderLeadTasks(lead);
+  renderTasks();
+  renderToday();
+  toast('Task created for this lead');
+}
+function renderLeadTasks(lead){
+  const tasks = DB.entries.filter(e=>e.type==='Task' && e.relatedLeadId===lead.id);
+  $('leadTasksLog').innerHTML = tasks.length ? tasks.map(t=>`
+    <div class="hist-log-item">
+      <div class="hl-date">${new Date(t.createdAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</div>
+      <div>${escHtml(t.text)} ${t.date?`<span class="task-link-badge">📅 ${new Date(t.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</span>`:''}</div>
+    </div>
+  `).join('') : '<div class="empty" style="padding:8px;">No tasks for this lead yet.</div>';
 }
 function renderEntries(){
   const q = ($('logSearch').value||'').toLowerCase();
@@ -994,12 +1072,18 @@ function entryHtml(e){
     const tag = e.done ? '' : dd<0 ? ' (Overdue)' : dd===0 ? ' (Today)' : '';
     dueBadge = `<span class="badge ${cls}">📅 ${dueLabel}${tag}</span> `;
   }
+  let relatedLeadBadge = '';
+  if(e.relatedLeadId && e.type==='Task'){
+    const lead = DB.leads.find(l=>l.id===e.relatedLeadId);
+    if(lead) relatedLeadBadge = `<div class="related-lead-badge" onclick="jumpEditLead('${e.relatedLeadId}')" title="View lead">🔗 ${escHtml(lead.name)}</div>`;
+  }
   return `<div class="entry ${e.done?'done':''}">
     <div style="display:flex;gap:8px;flex:1;">
       ${checkbox}
-      <div>
+      <div style="flex:1;">
         <div class="entry-text">${escHtml(e.text)}</div>
         <div class="entry-meta"><span class="badge ${e.type}">${e.type}</span> ${e.priority?`<span class="badge ${e.priority}">${e.priority}</span>`:''} ${dueBadge}${e.time?`<span class="badge time">🕐 ${formatTime12(e.time)}</span>`:''} · ${date}</div>
+        ${relatedLeadBadge}
       </div>
     </div>
     <div class="entry-actions">
@@ -1070,7 +1154,11 @@ function openLeadModal(lead){
   $('leadDeleteBtn').style.display = lead ? '' : 'none';
   $('leadTplBtn').style.display = (lead && lead.phone) ? '' : 'none';
   $('leadHistoryWrap').style.display = lead ? '' : 'none';
-  if(lead) renderLeadHistory(lead);
+  $('leadTasksWrap').style.display = lead ? '' : 'none';
+  if(lead) {
+    renderLeadHistory(lead);
+    renderLeadTasks(lead);
+  }
   $('leadModal').classList.add('open');
 }
 function closeModal(id){ $(id).classList.remove('open'); }
@@ -1128,8 +1216,10 @@ function leadCardHtml(l){
   const dateStr = l.nextDate ? new Date(l.nextDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '';
   const pendingBadge = l.pendingWith==='client' ? `<span class="badge pending-client">⏳ With Client</span>`
     : l.pendingWith==='me' ? `<span class="badge pending-me">⏳ With Me</span>` : '';
+  const relatedTasksCount = DB.entries.filter(e=>e.type==='Task' && e.relatedLeadId===l.id && !e.done).length;
+  const taskCountBadge = relatedTasksCount > 0 ? `<span class="lead-task-count" title="Related tasks">${relatedTasksCount}</span>` : '';
   return `<div class="lead-card" draggable="true" data-id="${l.id}" ondragstart="dragStart(event)" onclick="jumpEditLead('${l.id}')">
-    <strong><span class="temp-dot temp-${l.temp}"></span>${escHtml(l.name)}</strong>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;"><strong><span class="temp-dot temp-${l.temp}"></span>${escHtml(l.name)}</strong>${taskCountBadge}</div>
     <div class="lc-meta">${escHtml(l.nextAction)||'No next action set'}${dateStr?' · '+dateStr:''}</div>
     ${pendingBadge ? `<div class="lc-meta">${pendingBadge}${l.pendingStep?' '+escHtml(l.pendingStep):''}</div>` : (l.pendingStep?`<div class="lc-meta">${escHtml(l.pendingStep)}</div>`:'')}
     ${l.blockers?`<div class="lc-blocker">⚠️ ${escHtml(l.blockers)}</div>`:''}
