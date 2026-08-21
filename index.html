@@ -203,6 +203,8 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
       <div id="todayHabits"></div>
       <div class="section-title">📞 Follow up today</div>
       <div id="todayFollowups"></div>
+      <div class="section-title">✅ Tasks due today</div>
+      <div id="todayTasks"></div>
       <div class="section-title">🔔 Renewals due (next 14 days)</div>
       <div id="todayRenewals"></div>
       <div class="section-title">🎂 Birthdays this week</div>
@@ -238,6 +240,7 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
           <option value="Medium" selected>🟡 Medium</option>
           <option value="High">🔴 High</option>
         </select>
+        <input type="date" id="entryDate" style="display:none;" title="Due date">
         <input type="time" id="entryTime" style="display:none;" title="Time">
         <button class="primary" id="saveEntryBtn" onclick="saveEntry()">Save Entry</button>
         <button id="cancelEditBtn" style="display:none;" onclick="cancelEditEntry()">Cancel</button>
@@ -260,6 +263,9 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
       </select>
       <select id="taskFilterStatus" onchange="renderTasks()">
         <option value="">All Status</option><option value="open">Open</option><option value="done">Done</option>
+      </select>
+      <select id="taskFilterDate" onchange="renderTasks()">
+        <option value="">All Dates</option><option value="overdue">Overdue</option><option value="today">Due Today</option><option value="upcoming">Upcoming</option><option value="none">No Date Set</option>
       </select>
     </div>
     <div class="entries-list" id="tasksList"></div>
@@ -842,6 +848,19 @@ function renderToday(){
     </div>`;
   }).join('') : '<div class="empty">No follow-ups due. Nice work.</div>';
 
+  const dueTasks = DB.entries.filter(e=>e.type==='Task' && !e.done && e.date && daysUntil(e.date)<=0)
+    .sort((a,b)=>{
+      const aKey = a.date+'T'+(a.time||'00:00'), bKey = b.date+'T'+(b.time||'00:00');
+      return aKey.localeCompare(bKey);
+    });
+  $('todayTasks').innerHTML = dueTasks.length ? dueTasks.map(t=>{
+    const overdue = daysUntil(t.date) < 0;
+    return `<div class="today-row">
+      <div><strong>${escHtml(t.text)}</strong><div class="entry-meta">${overdue?'🔴 Overdue':'🟠 Due today'}${t.time?' · 🕐 '+formatTime12(t.time):''}${t.priority?' · '+t.priority:''}</div></div>
+      <button class="primary" onclick="toggleDone('${t.id}')">✓ Done</button>
+    </div>`;
+  }).join('') : '<div class="empty">No tasks due today.</div>';
+
   const renewals = DB.clients.filter(c=>c.renewalDate && daysUntil(c.renewalDate)<=14)
     .sort((a,b)=>new Date(a.renewalDate)-new Date(b.renewalDate));
   $('todayRenewals').innerHTML = renewals.length ? renewals.map(c=>{
@@ -871,6 +890,7 @@ let editingEntryId = null;
 function onTypeChange(){
   const isTask = $('entryType').value==='Task';
   $('entryPriority').style.display = isTask ? '' : 'none';
+  $('entryDate').style.display = isTask ? '' : 'none';
   $('entryTime').style.display = isTask ? '' : 'none';
 }
 function saveEntry(){
@@ -878,17 +898,18 @@ function saveEntry(){
   if(!text){ toast('Write something first'); return; }
   const type = $('entryType').value;
   const priority = type==='Task' ? $('entryPriority').value : null;
+  const date = type==='Task' ? $('entryDate').value : '';
   const time = type==='Task' ? $('entryTime').value : '';
   if(editingEntryId){
     const e = DB.entries.find(x=>x.id===editingEntryId);
-    if(e) Object.assign(e, { type, text, priority, time });
+    if(e) Object.assign(e, { type, text, priority, date, time });
     toast('Entry updated');
   } else {
-    DB.entries.unshift({ id: uid(), type, text, priority, time, done:false, createdAt: Date.now() });
+    DB.entries.unshift({ id: uid(), type, text, priority, date, time, done:false, createdAt: Date.now() });
     toast('Entry saved');
   }
   cancelEditEntry();
-  persist(); renderEntries(); renderTasks();
+  persist(); renderEntries(); renderTasks(); renderToday();
 }
 function editEntry(id){
   const e = DB.entries.find(x=>x.id===id);
@@ -897,7 +918,7 @@ function editEntry(id){
   $('entryText').value = e.text;
   $('entryType').value = e.type;
   onTypeChange();
-  if(e.type==='Task'){ $('entryPriority').value = e.priority||'Medium'; $('entryTime').value = e.time||''; }
+  if(e.type==='Task'){ $('entryPriority').value = e.priority||'Medium'; $('entryDate').value = e.date||''; $('entryTime').value = e.time||''; }
   $('saveEntryBtn').textContent = 'Update Entry';
   $('cancelEditBtn').style.display = '';
   switchTab('log');
@@ -906,6 +927,7 @@ function editEntry(id){
 function cancelEditEntry(){
   editingEntryId = null;
   $('entryText').value = '';
+  $('entryDate').value = '';
   $('entryTime').value = '';
   $('entryType').value = 'Note';
   onTypeChange();
@@ -933,12 +955,20 @@ function renderEntries(){
 function entryHtml(e){
   const date = new Date(e.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
   const checkbox = e.type==='Task' ? `<input type="checkbox" ${e.done?'checked':''} onchange="toggleDone('${e.id}')" style="margin-top:2px;">` : '';
+  let dueBadge = '';
+  if(e.type==='Task' && e.date){
+    const dd = daysUntil(e.date);
+    const dueLabel = new Date(e.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
+    const cls = e.done ? '' : dd<0 ? 'High' : dd===0 ? 'Medium' : 'Low';
+    const tag = e.done ? '' : dd<0 ? ' (Overdue)' : dd===0 ? ' (Today)' : '';
+    dueBadge = `<span class="badge ${cls}">📅 ${dueLabel}${tag}</span> `;
+  }
   return `<div class="entry ${e.done?'done':''}">
     <div style="display:flex;gap:8px;flex:1;">
       ${checkbox}
       <div>
         <div class="entry-text">${escHtml(e.text)}</div>
-        <div class="entry-meta"><span class="badge ${e.type}">${e.type}</span> ${e.priority?`<span class="badge ${e.priority}">${e.priority}</span>`:''} ${e.time?`<span class="badge time">🕐 ${formatTime12(e.time)}</span>`:''} · ${date}</div>
+        <div class="entry-meta"><span class="badge ${e.type}">${e.type}</span> ${e.priority?`<span class="badge ${e.priority}">${e.priority}</span>`:''} ${dueBadge}${e.time?`<span class="badge time">🕐 ${formatTime12(e.time)}</span>`:''} · ${date}</div>
       </div>
     </div>
     <div class="entry-actions">
@@ -952,11 +982,28 @@ function entryHtml(e){
 function renderTasks(){
   const p = $('taskFilterPriority').value;
   const s = $('taskFilterStatus').value;
+  const df = $('taskFilterDate').value;
   let list = DB.entries.filter(e=>e.type==='Task');
   if(p) list = list.filter(e=>e.priority===p);
   if(s==='open') list = list.filter(e=>!e.done);
   if(s==='done') list = list.filter(e=>e.done);
+  if(df){
+    list = list.filter(e=>{
+      if(df==='none') return !e.date;
+      if(!e.date) return false;
+      const dd = daysUntil(e.date);
+      if(df==='overdue') return dd<0;
+      if(df==='today') return dd===0;
+      if(df==='upcoming') return dd>0;
+      return true;
+    });
+  }
   list = list.slice().sort((a,b)=>{
+    const aKey = a.date ? a.date+'T'+(a.time||'00:00') : null;
+    const bKey = b.date ? b.date+'T'+(b.time||'00:00') : null;
+    if(aKey && bKey) return aKey.localeCompare(bKey);
+    if(aKey) return -1;
+    if(bKey) return 1;
     if(a.time && b.time) return a.time.localeCompare(b.time);
     if(a.time) return -1;
     if(b.time) return 1;
