@@ -437,6 +437,15 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
       </div>
       <div class="hist-log" id="leadHistoryLog"></div>
     </div>
+    <div class="field" id="leadTasksWrap" style="display:none;">
+      <label>Tasks for this Lead</label>
+      <div class="hist-add">
+        <input id="leadTaskText" placeholder="e.g. Call to confirm KYC docs" onkeydown="if(event.key==='Enter')addLeadTask()">
+        <input type="date" id="leadTaskDate" style="max-width:150px;">
+        <button onclick="addLeadTask()">Add Task</button>
+      </div>
+      <div class="hist-log" id="leadTasksLog"></div>
+    </div>
     <div class="modal-actions">
       <button id="leadTplBtn" onclick="openTemplateModalFor('lead')" style="display:none;">✉️ Message</button>
       <button id="leadDeleteBtn" class="danger" onclick="deleteLead()" style="display:none;">Delete</button>
