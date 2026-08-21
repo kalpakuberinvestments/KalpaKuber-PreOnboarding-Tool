@@ -205,6 +205,8 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
       <div id="todayFollowups"></div>
       <div class="section-title">✅ Tasks due today</div>
       <div id="todayTasks"></div>
+      <div class="section-title">📆 This Week</div>
+      <div id="todayWeekTasks"></div>
       <div class="section-title">🔔 Renewals due (next 14 days)</div>
       <div id="todayRenewals"></div>
       <div class="section-title">🎂 Birthdays this week</div>
@@ -229,7 +231,7 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
     </div>
 
     <div class="card">
-      <textarea id="entryText" rows="3" placeholder="Log a note or task…"></textarea>
+      <textarea id="entryText" rows="6" style="min-height:120px;" placeholder="Log a note or task…"></textarea>
       <div class="entry-controls">
         <select id="entryType" onchange="onTypeChange()">
           <option value="Note">Note 📝</option>
@@ -860,6 +862,20 @@ function renderToday(){
       <button class="primary" onclick="toggleDone('${t.id}')">✓ Done</button>
     </div>`;
   }).join('') : '<div class="empty">No tasks due today.</div>';
+
+  const weekTasks = DB.entries.filter(e=>e.type==='Task' && !e.done && e.date && daysUntil(e.date)>0 && daysUntil(e.date)<=7)
+    .sort((a,b)=>{
+      const aKey = a.date+'T'+(a.time||'00:00'), bKey = b.date+'T'+(b.time||'00:00');
+      return aKey.localeCompare(bKey);
+    });
+  $('todayWeekTasks').innerHTML = weekTasks.length ? weekTasks.map(t=>{
+    const dd = daysUntil(t.date);
+    const dayLabel = new Date(t.date).toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short'});
+    return `<div class="today-row">
+      <div><strong>${escHtml(t.text)}</strong><div class="entry-meta">📅 ${dayLabel}${dd===1?' (Tomorrow)':''}${t.time?' · 🕐 '+formatTime12(t.time):''}${t.priority?' · '+t.priority:''}</div></div>
+      <button onclick="editEntry('${t.id}')">Open</button>
+    </div>`;
+  }).join('') : '<div class="empty">No tasks due in the next 7 days.</div>';
 
   const renewals = DB.clients.filter(c=>c.renewalDate && daysUntil(c.renewalDate)<=14)
     .sort((a,b)=>new Date(a.renewalDate)-new Date(b.renewalDate));
