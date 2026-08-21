@@ -445,7 +445,7 @@ header p{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
     <div class="field"><label>Blockers</label><input id="leadBlockers" placeholder="Anything stuck or holding this up?"></div>
     <div class="field"><label>Tags</label><input id="leadTags" placeholder="e.g. Mutual Fund, Health Insurance (comma separated)"></div>
     <div class="field">
-      <label>Custom Fields <span style="text-transform:none;font-weight:400;">(up to 3)</span></label>
+      <label>Custom Fields <span style="text-transform:none;font-weight:400;">(up to 1)</span></label>
       <div class="cf-row"><input id="leadCf1k" placeholder="Field name"><input id="leadCf1v" placeholder="Value"></div>
       <div class="cf-row"><input id="leadCf2k" placeholder="Field name"><input id="leadCf2v" placeholder="Value"></div>
       <div class="cf-row"><input id="leadCf3k" placeholder="Field name"><input id="leadCf3v" placeholder="Value"></div>
@@ -745,7 +745,7 @@ function tagsHtml(tags){
 /* ══ CUSTOM FIELDS ══ */
 function readCustomFields(prefix){
   const out = [];
-  for(let i=1;i<=3;i++){
+  for(let i=1;i<=1;i++){
     const k = ($(prefix+'Cf'+i+'k').value||'').trim();
     const v = ($(prefix+'Cf'+i+'v').value||'').trim();
     if(k) out.push({k, v});
